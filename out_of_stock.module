@@ -13,6 +13,73 @@ function out_of_stock_help($path, $arg)
             break;
     }
 }
+
+/**
+ * Custom page callback function, declared in out_of_stock_menu().
+ */
+function _out_of_stock_page()
+{
+    $max_num = variable_get('out_of_stock_max', 3);
+    $result = out_of_stock_contents('page');
+    //Array to contain items for the page to render.
+    $items = array();
+    //Iterate over the resultset and format as links.
+    foreach ($result as $node) {
+        $product = commerce_product_load($node->entity_id);
+        $items[] = array(
+           // 'data' => l($product->title, 'node/' . $product->entity_id . '/edit'),
+            'data' => l( $product->title, 'admin/commerce/products/'
+                . $node->entity_id . '/edit'),
+        );
+    }
+    if (empty($items)) { //No content in the last week.
+        $page_array['out_of_stock_arguments'] = array(
+            //Title serves as page subtitle
+            '#title' => t('Products out of stock'),
+            '#markup' => t('No products out of stock'),
+        );
+        return $page_array;
+    } else {
+        $page_array['out_of_stock_arguments'] = array(
+            '#title' => t("All products with $max_num or less stock"),
+            '#items' => $items,
+            //Theme hook with suggestion.
+            '#theme' => 'item_list__out_of_stock',
+        );
+        return $page_array;
+    }
+}
+
+/**
+ *
+ * Implements hook_contents().
+ * @return DatabaseStatementInterface|null $query
+ */
+function out_of_stock_contents($action) {
+
+    //Use Database API to retrieve current posts.
+    //fiel data commerce products
+
+   switch ($action){
+       case 'page':
+           $max_num = variable_get('out_of_stock_max', 3);
+    $query = db_select('field_data_commerce_stock', 'n')
+        ->fields('n')
+        ->condition('commerce_stock_value', $max_num,'<') //Condicion de stock a cero
+        ->execute();
+        break;
+
+       case 'block':
+           $query = db_select('field_data_commerce_stock', 'n')
+               ->fields('n')
+               ->condition('commerce_stock_value', 0) //Condicion de stock a cero
+               ->execute();
+        break;
+   }
+    return $query;
+
+}
+
 /**
  * Implements hook_menu().
  */
@@ -22,6 +89,14 @@ function out_of_stock_menu() {
     $items['out_of_stock'] = array(
         'title' => 'Out of stock',
         'page callback' => '_out_of_stock_page',
+        'access arguments' => array('access administration pages'),
+        'type' => MENU_NORMAL_ITEM,
+    );
+    $items['admin/config/content/out_of_stock'] = array(
+        'title' => 'Out of stock',
+        'description' => 'Configuration for Out of Stock  module',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('out_of_stock_form'),
         'access arguments' => array('access administration pages'),
         'type' => MENU_NORMAL_ITEM,
     );
@@ -42,21 +117,6 @@ function out_of_stock_block_info() {
     return $blocks;
 }
 
-/**
- *
- * Implements hook_contents().
- * @return DatabaseStatementInterface|null $query
- */
-function out_of_stock_contents() {
-
-    //Use Database API to retrieve current posts.
-    //fiel data commerce products
-    $query = db_select('field_data_commerce_stock', 'n')
-        ->fields('n')
-        ->condition('commerce_stock_value', 0) //Condicion de stock a cero
-        ->execute();
-    return $query;
-}
 
 /**
  * @param string $delta
@@ -72,7 +132,7 @@ function out_of_stock_block_view($delta = '') {
             $block['subject'] = t('Out of stock');
             if (user_access('access content')) {
                 // Use our custom function to retrieve data.
-                $result = out_of_stock_contents();
+                $result = out_of_stock_contents('block');
                 // Array to contain items for the block to render.
                 $items = array();
                 // Iterate over the resultset and format as links.
@@ -93,7 +153,7 @@ function out_of_stock_block_view($delta = '') {
                         $block['content'] = theme('item_list', array(
                             'items' => $items));
                 }
-                
+
             }
             return $block;
     }
@@ -116,21 +176,21 @@ function out_of_stock_permission() {
  * Page callback: Current posts settings
  *
  * @see current_posts_menu()
-
-function out_of_stock_form($form, &$form_state) {
-$form['out_of_stock_max'] = array(
-'#type' => 'textfield',
-'#title' => t('Products with this stock left and less'),
-'#default_value' => variable_get('out_of_stock_max', 3),
-'#size' => 2,
-'#maxlength' => 2,
-'#description' => t('The maximum number of links to display in the block.'),
-'#required' => TRUE,
-);
-
-return system_settings_form($form);
-}
  */
+function out_of_stock_form($form, &$form_state) {
+    $form['out_of_stock_max'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Minimum of stock'),
+        '#default_value' => variable_get('out_of_stock_max', 3),
+        '#size' => 4,
+        '#maxlength' => 4,
+        '#description' => t('The minimum of stock'),
+        '#required' => TRUE,
+    );
+
+    return system_settings_form($form);
+}
+
 /**
  * Implements validation from the Form API.
  *
@@ -139,31 +199,14 @@ return system_settings_form($form);
  * @param $form_state
  *   An array that stores information about the form's current state
  *   during processing.
-
+ */
 function out_of_stock_form_validate($form, &$form_state){
-$max_num = $form_state['values']['out_of_stock_max'];
-if (!is_numeric($max_num)){
-form_set_error('out_of_stock_max', t('You must enter a number for the maximum number of stock.'));
+    $max_num = $form_state['values']['out_of_stock_max'];
+    if (!is_numeric($max_num)){
+        form_set_error('out_of_stock_max', t('You must enter a number for the minimum stock.'));
+    }
+    elseif ($max_num <= 0){
+        form_set_error('out_of_stock_max', t('Minimum number of Stock must be positive.'));
+    }
 }
-elseif ($max_num <= 0){
-form_set_error('out_of_stock_max', t('Maximum number of stock to display must be positive.'));
-}
-}
- */
-/**
- * Mostrar pagina
 
-function out_of_stock_pagina(){
-$items=array();
-$items['pagina']=array(
-'title'=>'Out of Stock Page',
-'description'=>'Esto es una prueba',
-'page callback'=>'drupal_get_forms',
-'page arguments'=>array('drupal_get_form'),
-'access callbacks'=>'user_access',
-'access arguments'=>array('access content'),
-'type'=>MENU_NORMAL_ITEM
-
-);
-}
- */
