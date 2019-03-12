@@ -1,9 +1,14 @@
 <?php
 
 /**
- * @param $path
- * @param $arg
- * @return string|null
+ * Implements hook_help().
+ *
+ * Displays help and module information.
+ *
+ * @param path
+ *   Which path of the site we're using to display help
+ * @param arg
+ *   Array that holds the current path as returned from arg() function
  */
 function out_of_stock_help($path, $arg)
 {
@@ -173,9 +178,9 @@ function out_of_stock_permission() {
 }
 
 /**
- * Page callback: Current posts settings
+ * Page callback: Out of Stock settings
  *
- * @see current_posts_menu()
+ * @see out_of_stock_menu()
  */
 function out_of_stock_form($form, &$form_state) {
     $form['out_of_stock_max'] = array(
